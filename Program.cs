@@ -129,6 +129,7 @@ namespace AntiSonar
                 string zipPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "svv.zip");
                 try
                 {
+                    ServicePointManager.SecurityProtocol = (SecurityProtocolType)3072; // TLS 1.2
                     using (WebClient client = new WebClient())
                     {
                         client.Headers.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)");
