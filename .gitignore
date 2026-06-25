@@ -1,0 +1,16 @@
+# Build results
+obj/
+bin/
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# User-specific files
+*.user
+*.userosscache
+*.sln.docstates
+
+# IDE files
+.idea/
+.vscode/
