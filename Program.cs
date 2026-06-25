@@ -40,12 +40,14 @@ namespace AntiSonar
         private CheckBox chkAux;
         private CheckBox chkAutorun;
 
-        private string svvPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "SoundVolumeView.exe");
+        private string appDataPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "AntiSonar");
+        private string svvPath;
         private string regPath = @"Software\AntiSonar";
         private string runPath = @"Software\Microsoft\Windows\CurrentVersion\Run";
 
         public MainForm(bool startHidden)
         {
+            svvPath = Path.Combine(appDataPath, "SoundVolumeView.exe");
             EnsureDependencies();
             // Setup Form
             this.Text = "AntiSonar (Custom Edition)";
@@ -124,9 +126,14 @@ namespace AntiSonar
 
         private void EnsureDependencies()
         {
+            if (!Directory.Exists(appDataPath))
+            {
+                Directory.CreateDirectory(appDataPath);
+            }
+
             if (!File.Exists(svvPath))
             {
-                string zipPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "svv.zip");
+                string zipPath = Path.Combine(appDataPath, "svv.zip");
                 try
                 {
                     ServicePointManager.SecurityProtocol = (SecurityProtocolType)3072; // TLS 1.2
@@ -137,7 +144,7 @@ namespace AntiSonar
                     }
                     if (File.Exists(zipPath))
                     {
-                        ZipFile.ExtractToDirectory(zipPath, AppDomain.CurrentDomain.BaseDirectory);
+                        ZipFile.ExtractToDirectory(zipPath, appDataPath);
                         File.Delete(zipPath);
                     }
                 }
