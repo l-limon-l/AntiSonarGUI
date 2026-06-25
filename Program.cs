@@ -16,8 +16,6 @@ namespace AntiSonar
         {
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
-            
-            // Выкручиваем приоритет на максимум для автозапуска
             Process.GetCurrentProcess().PriorityClass = ProcessPriorityClass.High;
 
             bool startHidden = false;
@@ -38,6 +36,7 @@ namespace AntiSonar
         private CheckBox chkChat;
         private CheckBox chkMedia;
         private CheckBox chkAux;
+        private CheckBox chkMic;
         private CheckBox chkAutorun;
 
         private string appDataPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "AntiSonar");
@@ -51,7 +50,7 @@ namespace AntiSonar
             EnsureDependencies();
             // Setup Form
             this.Text = "AntiSonar (Custom Edition)";
-            this.Size = new Size(300, 250);
+            this.Size = new Size(300, 280);
             this.FormBorderStyle = FormBorderStyle.FixedSingle;
             this.MaximizeBox = false;
             this.StartPosition = FormStartPosition.CenterScreen;
@@ -77,14 +76,16 @@ namespace AntiSonar
             chkChat = new CheckBox() { Text = "SteelSeries Sonar - Chat", Location = new Point(20, 65), AutoSize = true };
             chkMedia = new CheckBox() { Text = "SteelSeries Sonar - Media", Location = new Point(20, 90), AutoSize = true };
             chkAux = new CheckBox() { Text = "SteelSeries Sonar - Aux", Location = new Point(20, 115), AutoSize = true };
+            chkMic = new CheckBox() { Text = "SteelSeries Sonar - Microphone", Location = new Point(20, 140), AutoSize = true };
             
-            chkAutorun = new CheckBox() { Text = "Start with Windows (Hidden)", Location = new Point(20, 155), AutoSize = true, ForeColor = Color.Blue };
+            chkAutorun = new CheckBox() { Text = "Start with Windows (Hidden)", Location = new Point(20, 180), AutoSize = true, ForeColor = Color.Blue };
             
             this.Controls.Add(lblTitle);
             this.Controls.Add(chkGaming);
             this.Controls.Add(chkChat);
             this.Controls.Add(chkMedia);
             this.Controls.Add(chkAux);
+            this.Controls.Add(chkMic);
             this.Controls.Add(chkAutorun);
 
             LoadSettings();
@@ -94,6 +95,7 @@ namespace AntiSonar
             chkChat.CheckedChanged += SaveSettings;
             chkMedia.CheckedChanged += SaveSettings;
             chkAux.CheckedChanged += SaveSettings;
+            chkMic.CheckedChanged += SaveSettings;
             chkAutorun.CheckedChanged += OnAutorunChanged;
 
             this.FormClosing += OnFormClosing;
@@ -111,7 +113,7 @@ namespace AntiSonar
             {
                 this.WindowState = FormWindowState.Minimized;
                 this.ShowInTaskbar = false;
-                trayIcon.Visible = false; // Прячем из трея при автозапуске
+                trayIcon.Visible = false;
             }
         }
 
@@ -160,14 +162,20 @@ namespace AntiSonar
                 chkChat.Checked = Convert.ToInt32(key.GetValue("KillChat", 1)) == 1;
                 chkMedia.Checked = Convert.ToInt32(key.GetValue("KillMedia", 0)) == 1;
                 chkAux.Checked = Convert.ToInt32(key.GetValue("KillAux", 0)) == 1;
+                chkMic.Checked = Convert.ToInt32(key.GetValue("KillMic", 0)) == 1;
             }
-            using (RegistryKey key = Registry.CurrentUser.OpenSubKey(runPath))
+            try
             {
-                if (key != null && key.GetValue("AntiSonarGUI") != null)
+                ProcessStartInfo psi = new ProcessStartInfo("schtasks", "/query /tn AntiSonarGUI");
+                psi.CreateNoWindow = true;
+                psi.UseShellExecute = false;
+                using (Process p = Process.Start(psi))
                 {
-                    chkAutorun.Checked = true;
+                    p.WaitForExit();
+                    chkAutorun.Checked = (p.ExitCode == 0);
                 }
             }
+            catch { }
         }
 
         private void SaveSettings(object sender, EventArgs e)
@@ -178,22 +186,38 @@ namespace AntiSonar
                 key.SetValue("KillChat", chkChat.Checked ? 1 : 0);
                 key.SetValue("KillMedia", chkMedia.Checked ? 1 : 0);
                 key.SetValue("KillAux", chkAux.Checked ? 1 : 0);
+                key.SetValue("KillMic", chkMic.Checked ? 1 : 0);
             }
         }
 
         private void OnAutorunChanged(object sender, EventArgs e)
         {
-            using (RegistryKey key = Registry.CurrentUser.OpenSubKey(runPath, true))
+            try
             {
+                ProcessStartInfo psi = new ProcessStartInfo();
+                psi.FileName = "schtasks";
                 if (chkAutorun.Checked)
                 {
-                    string exePath = "\"" + Application.ExecutablePath + "\" -hidden";
-                    key.SetValue("AntiSonarGUI", exePath);
+                    psi.Arguments = "/create /tn \"AntiSonarGUI\" /tr \"\\\"" + Application.ExecutablePath + "\\\" -hidden\" /sc onlogon /rl highest /f";
                 }
                 else
                 {
-                    key.DeleteValue("AntiSonarGUI", false);
+                    psi.Arguments = "/delete /tn \"AntiSonarGUI\" /f";
                 }
+                psi.Verb = "runas"; 
+                psi.UseShellExecute = true; 
+                psi.WindowStyle = ProcessWindowStyle.Hidden;
+
+                using (Process p = Process.Start(psi))
+                {
+                    p.WaitForExit();
+                }
+            }
+            catch (Exception)
+            {
+                chkAutorun.CheckedChanged -= OnAutorunChanged;
+                chkAutorun.Checked = !chkAutorun.Checked;
+                chkAutorun.CheckedChanged += OnAutorunChanged;
             }
         }
 
@@ -205,6 +229,7 @@ namespace AntiSonar
             if (chkChat.Checked) DisableDevice("SteelSeries Sonar - Chat");
             if (chkMedia.Checked) DisableDevice("SteelSeries Sonar - Media");
             if (chkAux.Checked) DisableDevice("SteelSeries Sonar - Aux");
+            if (chkMic.Checked) DisableDevice("SteelSeries Sonar - Microphone");
         }
 
         private void DisableDevice(string deviceName)
@@ -240,7 +265,7 @@ namespace AntiSonar
                 e.Cancel = true;
                 this.Hide();
                 this.ShowInTaskbar = false;
-                trayIcon.Visible = false; // Прячем из трея при закрытии
+                trayIcon.Visible = false;
             }
             else
             {
