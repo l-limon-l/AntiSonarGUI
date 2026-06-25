@@ -14,3 +14,5 @@ Thumbs.db
 # IDE files
 .idea/
 .vscode/
+*.exe
+*.zip
