@@ -4,6 +4,8 @@ using System.Windows.Forms;
 using System.Diagnostics;
 using Microsoft.Win32;
 using System.IO;
+using System.Net;
+using System.IO.Compression;
 
 namespace AntiSonar
 {
@@ -44,6 +46,7 @@ namespace AntiSonar
 
         public MainForm(bool startHidden)
         {
+            EnsureDependencies();
             // Setup Form
             this.Text = "AntiSonar (Custom Edition)";
             this.Size = new Size(300, 250);
@@ -116,6 +119,28 @@ namespace AntiSonar
             if (this.WindowState == FormWindowState.Minimized)
             {
                 this.Hide();
+            }
+        }
+
+        private void EnsureDependencies()
+        {
+            if (!File.Exists(svvPath))
+            {
+                string zipPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "svv.zip");
+                try
+                {
+                    using (WebClient client = new WebClient())
+                    {
+                        client.Headers.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)");
+                        client.DownloadFile("https://www.nirsoft.net/utils/soundvolumeview-x64.zip", zipPath);
+                    }
+                    if (File.Exists(zipPath))
+                    {
+                        ZipFile.ExtractToDirectory(zipPath, AppDomain.CurrentDomain.BaseDirectory);
+                        File.Delete(zipPath);
+                    }
+                }
+                catch { }
             }
         }
 
