@@ -42,10 +42,14 @@ namespace AntiSonar
         private string appDataPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "AntiSonar");
         private string svvPath;
         private string regPath = @"Software\AntiSonar";
+        private bool isHiddenRun;
+        private bool hasEverSuccessfullyKilled = false;
+        private int consecutiveFailuresAfterSuccess = 0;
         private string runPath = @"Software\Microsoft\Windows\CurrentVersion\Run";
 
         public MainForm(bool startHidden)
         {
+            isHiddenRun = startHidden;
             svvPath = Path.Combine(appDataPath, "SoundVolumeView.exe");
             EnsureDependencies();
             // Setup Form
@@ -225,11 +229,64 @@ namespace AntiSonar
         {
             if (!File.Exists(svvPath)) return;
 
-            if (chkGaming.Checked) DisableDevice("SteelSeries Sonar - Gaming");
-            if (chkChat.Checked) DisableDevice("SteelSeries Sonar - Chat");
-            if (chkMedia.Checked) DisableDevice("SteelSeries Sonar - Media");
-            if (chkAux.Checked) DisableDevice("SteelSeries Sonar - Aux");
-            if (chkMic.Checked) DisableDevice("SteelSeries Sonar - Microphone");
+            bool killedThisTick = false;
+
+            try
+            {
+                ProcessStartInfo psi = new ProcessStartInfo(svvPath, "/scomma \"\"");
+                psi.RedirectStandardOutput = true;
+                psi.UseShellExecute = false;
+                psi.CreateNoWindow = true;
+                
+                using (Process p = Process.Start(psi))
+                {
+                    string csv = p.StandardOutput.ReadToEnd();
+                    p.WaitForExit();
+
+                    if (chkGaming.Checked && CheckAndDisable(csv, "SteelSeries Sonar - Gaming")) killedThisTick = true;
+                    if (chkChat.Checked && CheckAndDisable(csv, "SteelSeries Sonar - Chat")) killedThisTick = true;
+                    if (chkMedia.Checked && CheckAndDisable(csv, "SteelSeries Sonar - Media")) killedThisTick = true;
+                    if (chkAux.Checked && CheckAndDisable(csv, "SteelSeries Sonar - Aux")) killedThisTick = true;
+                    if (chkMic.Checked && CheckAndDisable(csv, "SteelSeries Sonar - Microphone")) killedThisTick = true;
+                }
+            }
+            catch { }
+
+            if (isHiddenRun)
+            {
+                if (killedThisTick)
+                {
+                    hasEverSuccessfullyKilled = true;
+                    consecutiveFailuresAfterSuccess = 0;
+                }
+                else if (hasEverSuccessfullyKilled)
+                {
+                    consecutiveFailuresAfterSuccess++;
+                    if (consecutiveFailuresAfterSuccess >= 5)
+                    {
+                        Application.Exit();
+                        return;
+                    }
+                }
+            }
+        }
+
+        private bool CheckAndDisable(string csv, string deviceName)
+        {
+            string searchStr = deviceName + ",Device";
+            int idx = csv.IndexOf(searchStr);
+            if (idx >= 0)
+            {
+                int newlineIdx = csv.IndexOf('\n', idx);
+                string line = newlineIdx > 0 ? csv.Substring(idx, newlineIdx - idx) : csv.Substring(idx);
+                
+                if (line.Contains(",Active,") || line.Contains(",Inactive,"))
+                {
+                    DisableDevice(deviceName);
+                    return true;
+                }
+            }
+            return false;
         }
 
         private void DisableDevice(string deviceName)
@@ -253,6 +310,7 @@ namespace AntiSonar
 
         private void OnShow(object sender, EventArgs e)
         {
+            isHiddenRun = false; // Stop auto-close if user opens the UI
             this.Show();
             this.WindowState = FormWindowState.Normal;
             this.ShowInTaskbar = true;
